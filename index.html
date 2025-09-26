@@ -1,68 +1,50 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PDF</title>
-</head>
-<body>
-  <h1>PDF</h1>
-  <input id="files" type="file" accept="image/*" multiple style="display:none">
-  <button id="open">画像を選択</button>
-  <input id="name" type="text" placeholder="名前.pdf">
-  <button id="make">作成</button>
+<script>
+  const fileInput   = document.getElementById('files');
+  const nameInput   = document.getElementById('name');
+  const makeButton  = document.getElementById('makeBtn');
+  const openButton  = document.getElementById('openBtn');
 
-  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script>
-    const filesInput = document.getElementById('files');
-    const nameInput = document.getElementById('name');
-    const makeBtn = document.getElementById('make');
-    const openBtn = document.getElementById('open');
+  // 画像選択ボタンを押したらファイル選択ダイアログを開く
+  openButton.onclick = () => {
+    fileInput.click();
+  };
 
-    // デフォルトを「名前.pdf」にする
-    nameInput.value = '名前.pdf';
+  // PDF作成処理
+  makeButton.onclick = async () => {
+    if (!fileInput.files.length) return;
 
-    openBtn.addEventListener('click', ()=> filesInput.click());
-    makeBtn.addEventListener('click', makePdf);
+    makeButton.disabled = true;
+    makeButton.textContent = '作成中...';
 
-    async function makePdf(){
-      const files=[...filesInput.files].filter(f=>f.type.startsWith('image/'));
-      if(!files.length){ return; }
-      makeBtn.disabled=true; makeBtn.textContent='作成中…';
-      try{
-        const { PDFDocument } = PDFLib;
-        const pdf = await PDFDocument.create();
-        const name = (nameInput.value||'名前.pdf').trim();
+    const pdfDoc = await PDFLib.PDFDocument.create();
 
-        for(const file of files){
-          const data = await file.arrayBuffer();
-          let img, w, h;
-          try{
-            img = await pdf.embedJpg(data);
-          }catch{
-            try{ img = await pdf.embedPng(data); }
-            catch{ continue; }
-          }
-          w = img.width; h = img.height;
-          const page = pdf.addPage([w, h]);
-          page.drawImage(img, {x:0, y:0, width:w, height:h});
-        }
+    for (const file of fileInput.files) {
+      const buffer = await file.arrayBuffer();
+      let image;
 
-        const bytes = await pdf.save();
-        const blob = new Blob([bytes], {type:'application/pdf'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const outName = (name.endsWith('.pdf')? name : name + '.pdf').replace(/\s+/g,'_');
-        a.download = outName || '名前.pdf';
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
-      }catch(e){
-        console.error(e);
-      }finally{
-        makeBtn.disabled=false; makeBtn.textContent='作成';
+      // jpg/pngを順番にトライ
+      try {
+        image = await pdfDoc.embedJpg(buffer);
+      } catch {
+        try {
+          image = await pdfDoc.embedPng(buffer);
+        } catch {}
       }
+      if (!image) continue;
+
+      const page = pdfDoc.addPage([image.width, image.height]);
+      page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
     }
-  </script>
-</body>
-</html>
+
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = nameInput.value.trim() || 'output.pdf';
+    link.click();
+
+    makeButton.disabled = false;
+    makeButton.textContent = '作成';
+  };
+</script>
